@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.*
+server/data/settings.json
+server/logs/*.log
+client/dist/
+.DS_Store
+*.pid
+.pm2/
+
+*.tsbuildinfo
