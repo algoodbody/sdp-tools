@@ -69,6 +69,25 @@ Other pm2 helpers: `npm run pm2:restart`, `npm run pm2:stop`, `npm run pm2:logs`
 
 By default the app listens on port `4000` (override with `PORT` in `ecosystem.config.js` or the environment).
 
+### Windows deployment
+
+On a Windows host, `deploy.ps1` wraps the pull/install/build/pm2 steps above into one command:
+
+```powershell
+.\deploy.ps1
+```
+
+It pulls the latest changes for the current branch, runs `npm install` and `npm run build`, then starts (or restarts, if already running) the app under pm2 via `ecosystem.config.js`, saving the pm2 process list with `npx pm2 save`.
+
+`pm2 startup` only supports Unix-style init systems (systemd, upstart, launchd, etc.) and does nothing useful on Windows, so it won't bring the app back after a reboot there. To auto-start on Windows, instead register a Task Scheduler task (or use a service wrapper like [pm2-installer](https://github.com/jessety/pm2-installer) or [NSSM](https://nssm.cc/)) that runs on logon/boot and executes `npx pm2 resurrect` from the repo root — that restores whatever was running when you last ran `pm2 save`.
+
+Useful flags:
+
+- `-Branch <name>` — check out and pull a specific branch first.
+- `-SkipPull` — deploy whatever is already on disk, no `git pull`.
+- `-SkipInstall` — skip `npm install` and reuse `node_modules`.
+- `-Port <n>` — port to deploy on (defaults to `4000`).
+
 ## Notes
 
 - Settings (including credentials) are stored locally in `server/data/settings.json`, which is git-ignored. The client/secret and refresh token are never sent back to the browser once saved.

@@ -20,6 +20,7 @@
     "pm2:logs": "pm2 logs sdp-tools"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "pm2": "^5.4.3"
   }
 }
