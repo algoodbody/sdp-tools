@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { loadSettings } from './settingsStore';
+import { loadSettings, saveSettings } from './settingsStore';
 import { logger } from '../logger';
 import {
   CloseRequestPayload,
@@ -24,6 +24,10 @@ const DC_DOMAINS: Record<DataCenter, DcDomains> = {
   ca: { accounts: 'accounts.zohocloud.ca', api: 'sdpondemand.manageengine.ca' },
   cn: { accounts: 'accounts.zoho.com.cn', api: 'sdpondemand.manageengine.cn' }
 };
+
+export function getAccountsHost(dc: DataCenter): string {
+  return DC_DOMAINS[dc].accounts;
+}
 
 class SdpAuthError extends Error {}
 export class SdpApiError extends Error {
@@ -241,6 +245,56 @@ export async function testConnection(): Promise<{ ok: boolean; message: string }
     return { ok: true, message: 'Connected to ServiceDesk Plus successfully.' };
   } catch (err: any) {
     return { ok: false, message: err.message || 'Connection failed.' };
+  }
+}
+
+export const OAUTH_SCOPE = 'SDPOnDemand.requests.ALL,SDPOnDemand.technicians.READ';
+
+export interface OAuthCredentials {
+  clientId: string;
+  clientSecret: string;
+  dataCenter: DataCenter;
+}
+
+// Takes the client/data-center identity explicitly (snapshotted by the caller at the moment the
+// authorization redirect was issued) rather than reloading current settings, so a change made to
+// settings while the user is on Zoho's consent screen can't cause the code to be exchanged under
+// a different identity than the one Zoho actually granted it for.
+export async function exchangeAuthorizationCode(
+  code: string,
+  redirectUri: string,
+  credentials: OAuthCredentials
+): Promise<void> {
+  const { clientId, clientSecret, dataCenter } = credentials;
+  const dc = DC_DOMAINS[dataCenter];
+  try {
+    const res = await axios.post(`https://${dc.accounts}/oauth/v2/token`, null, {
+      params: {
+        grant_type: 'authorization_code',
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri
+      }
+    });
+    const { refresh_token, access_token, expires_in } = res.data;
+    if (!refresh_token) {
+      throw new SdpApiError(
+        res.data?.error ||
+          'Zoho did not return a refresh token. Make sure the OAuth client is a "Server-based Application" (not a Self Client), and that you have not already authorized this app without revoking prior access first (Zoho only issues a refresh token on first-time consent).',
+        400
+      );
+    }
+    saveSettings({ refreshToken: refresh_token });
+    if (access_token) {
+      cachedToken = { token: access_token, expiresAt: Date.now() + (expires_in || 3600) * 1000 };
+    }
+    logger.info('Connected to ServiceDesk Plus via OAuth authorization flow');
+  } catch (err: any) {
+    if (err instanceof SdpApiError) throw err;
+    const message = err?.response?.data?.error_description || err?.response?.data?.error || err.message;
+    logger.error('OAuth authorization code exchange failed', { err: err?.response?.data || String(err) });
+    throw new SdpApiError(message || 'Failed to exchange authorization code for a refresh token.', 400);
   }
 }
 

@@ -17,7 +17,7 @@ A local web app for managing ManageEngine ServiceDesk Plus (Cloud) requests: sea
 - Click a **Request ID** to open the ticket directly in ServiceDesk Plus.
 - **Close a ticket** — per-row "Close" button opens a modal to capture resolution, category, sub-category, item, and closure code.
 - **Bulk actions** — select multiple rows (e.g. all tickets for a technician) and bulk-close them with the same details applied to every ticket.
-- **Settings** tab to configure the ServiceDesk Plus Cloud OAuth connection (data center, portal name, client ID/secret, refresh token), with a "Test connection" button.
+- **Settings** tab to configure the ServiceDesk Plus Cloud OAuth connection, with a one-click **Connect** button that runs the OAuth authorization flow and captures the refresh token automatically (no manual token generation/pasting required), plus a "Test connection" button.
 - **Logs** tab to view recent server activity/errors (auto-refreshing).
 - Ships with **demo/mock data** out of the box so the UI is usable before you configure a real connection.
 
@@ -37,9 +37,13 @@ npm install
 
 ### Connecting to ServiceDesk Plus Cloud
 
-1. Create a **Self Client** OAuth app at `https://api-console.zoho.<dc>` (e.g. `zoho.eu`, `zoho.com`, `zoho.in`) for your data center.
-2. Generate a refresh token with scope `SDPOnDemand.requests.ALL,SDPOnDemand.technicians.READ` (add more scopes if you extend the app).
-3. In the app's **Settings** tab, enter your data center, portal name, client ID, client secret, and refresh token, then **Save** and **Test connection**.
+1. In the app's **Settings** tab, pick your data center and enter your portal name — the tab shows the exact **redirect URI** to use (`http://<host>:<port>/api/settings/oauth/callback`).
+2. Create a **Server-based Application** OAuth client at `https://api-console.zoho.<dc>` (e.g. `zoho.eu`, `zoho.com`, `zoho.in`) for your data center, and add that redirect URI to its authorized redirect URIs. (Requesting scope `SDPOnDemand.requests.ALL,SDPOnDemand.technicians.READ` — add more scopes if you extend the app.)
+3. Enter the Client ID and Client secret in Settings and click **Save details**.
+4. Click **Connect to ServiceDesk Plus…** — you'll be sent to Zoho's consent screen, and on approval the app captures and stores a refresh token automatically. No manual token generation or pasting required.
+5. Click **Test connection** to confirm.
+
+If you already have a refresh token from a Self Client OAuth app (or prefer not to use the interactive flow), the "Advanced" section in Settings lets you paste one in directly instead of using Connect.
 
 Until configured, the app serves demo data so you can try out the UI.
 
@@ -87,6 +91,9 @@ Useful flags:
 - `-SkipPull` — deploy whatever is already on disk, no `git pull`.
 - `-SkipInstall` — skip `npm install` and reuse `node_modules`.
 - `-Port <n>` — port to deploy on (defaults to `4000`).
+- `-OpenBrowser` — open the app in your default browser once it's confirmed healthy.
+
+On success the script prints the app's URL on its own line so terminals that auto-linkify plain URLs (Windows Terminal, VS Code's integrated terminal, etc.) make it clickable; use `-OpenBrowser` if you'd rather it opened for you automatically. If `npm install` fails with `npm error Exit handler never called!`, that's a known npm client bug ([npm/cli#4028](https://github.com/npm/cli/issues/4028)) unrelated to this project — the script retries once automatically, and if it still fails, try `npm cache clean --force` or updating npm (`npm install -g npm@latest`).
 
 ## Notes
 

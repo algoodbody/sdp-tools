@@ -66,6 +66,15 @@ export async function testConnection(): Promise<{ ok: boolean; message: string }
   return data;
 }
 
+export async function getOAuthRedirectUri(): Promise<string> {
+  const { data } = await api.get('/settings/oauth/redirect-uri');
+  return data.redirectUri;
+}
+
+export function oauthAuthorizeUrl(): string {
+  return '/api/settings/oauth/authorize';
+}
+
 export async function fetchLogs(lines = 500): Promise<string[]> {
   const { data } = await api.get('/logs', { params: { lines } });
   return data.lines;
