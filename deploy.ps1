@@ -20,11 +20,14 @@
 .PARAMETER Port
     Port for the app to listen on. Defaults to 4000.
 
+.PARAMETER OpenBrowser
+    Open the app in the default browser once the deployment is confirmed healthy.
+
 .EXAMPLE
     .\deploy.ps1
 
 .EXAMPLE
-    .\deploy.ps1 -Branch main -Port 4100
+    .\deploy.ps1 -Branch main -Port 4100 -OpenBrowser
 #>
 
 [CmdletBinding()]
@@ -33,7 +36,8 @@ param(
     [switch]$SkipPull,
     [switch]$SkipInstall,
     [ValidateRange(1, 65535)]
-    [int]$Port = 4000
+    [int]$Port = 4000,
+    [switch]$OpenBrowser
 )
 
 $ErrorActionPreference = 'Stop'
@@ -94,8 +98,22 @@ try {
         # --include=dev guarantees devDependencies (typescript, vite, etc.) are installed even if
         # NODE_ENV=production is set in the calling shell, which npm would otherwise treat as a
         # signal to omit them — and the build below needs them.
-        npm install --include=dev
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
+        #
+        # npm install is retried once because npm's CLI has a known, purely client-side race
+        # ("Exit handler never called!", npm/cli#4028) that surfaces intermittently, especially on
+        # Windows — a plain re-run typically succeeds without any change on our end.
+        $maxInstallAttempts = 2
+        for ($attempt = 1; $attempt -le $maxInstallAttempts; $attempt++) {
+            npm install --include=dev
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -lt $maxInstallAttempts) {
+                Write-Host "npm install failed (exit $LASTEXITCODE) — retrying once, this can be a transient npm client issue..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 2
+            }
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "npm install failed with exit code $LASTEXITCODE after $maxInstallAttempts attempt(s). If the error is 'Exit handler never called!', that is a known npm client bug (https://github.com/npm/cli/issues/4028), not an issue with this project — try 'npm cache clean --force', updating npm ('npm install -g npm@latest'), or temporarily excluding the npm cache/repo folder from antivirus scanning, then re-run this script."
+        }
     } else {
         Write-Step "Skipping npm install (-SkipInstall)"
     }
@@ -152,7 +170,15 @@ try {
     npx pm2 save
     if ($LASTEXITCODE -ne 0) { throw "pm2 save failed with exit code $LASTEXITCODE — the app is healthy but the process list was not updated, so a reboot may not restore this deployment." }
 
-    Write-Step "Deployed successfully. App is listening on http://localhost:$Port"
+    $appUrl = "http://localhost:$Port"
+    Write-Step "Deployed successfully."
+    # Printed as a bare URL on its own line (no surrounding text/color) so terminals that
+    # auto-linkify plain URLs (Windows Terminal, VS Code, etc.) make it clickable.
+    Write-Host $appUrl
+
+    if ($OpenBrowser) {
+        Start-Process $appUrl
+    }
 }
 finally {
     Pop-Location

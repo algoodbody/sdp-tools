@@ -8,7 +8,11 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:4000',
-        changeOrigin: true
+        changeOrigin: true,
+        // Forwards the browser's real origin (localhost:5173) via X-Forwarded-* headers so the
+        // server can build OAuth redirect/callback URLs that point back at the Vite dev server
+        // instead of its own :4000 origin.
+        xfwd: true
       }
     }
   }
