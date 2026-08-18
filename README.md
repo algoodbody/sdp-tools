@@ -93,7 +93,7 @@ Useful flags:
 - `-Port <n>` — port to deploy on (defaults to `4000`).
 - `-OpenBrowser` — open the app in your default browser once it's confirmed healthy.
 
-On success the script prints the app's URL on its own line so terminals that auto-linkify plain URLs (Windows Terminal, VS Code's integrated terminal, etc.) make it clickable; use `-OpenBrowser` if you'd rather it opened for you automatically. If `npm install` fails with `npm error Exit handler never called!`, that's a known npm client bug ([npm/cli#4028](https://github.com/npm/cli/issues/4028)) unrelated to this project — the script retries once automatically, and if it still fails, try `npm cache clean --force` or updating npm (`npm install -g npm@latest`).
+On success the script prints the app's URL on its own line so terminals that auto-linkify plain URLs (Windows Terminal, VS Code's integrated terminal, etc.) make it clickable; use `-OpenBrowser` if you'd rather it opened for you automatically. If `npm install` fails with `npm error Exit handler never called!`, that's a known npm client bug ([npm/cli#4028](https://github.com/npm/cli/issues/4028)) unrelated to this project — the script retries automatically up to three times, cleaning the npm cache after the first failure and doing a clean `node_modules` reinstall after the second. If it still fails after all three attempts, something outside npm's control is most likely interfering (commonly antivirus/EDR scanning or locking files under the npm cache or repo folder) — try excluding both from real-time scanning, or update npm (`npm install -g npm@latest`).
 
 ## Notes
 
