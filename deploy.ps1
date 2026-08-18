@@ -98,21 +98,31 @@ try {
         # --include=dev guarantees devDependencies (typescript, vite, etc.) are installed even if
         # NODE_ENV=production is set in the calling shell, which npm would otherwise treat as a
         # signal to omit them — and the build below needs them.
+        # --no-audit --no-fund skip the post-install audit/funding network calls, which is the
+        # most commonly reported practical mitigation for npm's "Exit handler never called!" bug
+        # (npm/cli#4028) — a purely client-side race that surfaces especially on Windows.
         #
-        # npm install is retried once because npm's CLI has a known, purely client-side race
-        # ("Exit handler never called!", npm/cli#4028) that surfaces intermittently, especially on
-        # Windows — a plain re-run typically succeeds without any change on our end.
-        $maxInstallAttempts = 2
+        # A bare retry doesn't help when the underlying cause is persistent rather than transient
+        # (a stuck/corrupted npm cache is the most common one), so each retry after the first
+        # applies real remediation before trying again: first `npm cache clean --force`, then, if
+        # that's not enough, wiping node_modules for a fully fresh install.
+        $installArgs = @('install', '--include=dev', '--no-audit', '--no-fund')
+        $maxInstallAttempts = 3
         for ($attempt = 1; $attempt -le $maxInstallAttempts; $attempt++) {
-            npm install --include=dev
+            npm @installArgs
             if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -lt $maxInstallAttempts) {
-                Write-Host "npm install failed (exit $LASTEXITCODE) — retrying once, this can be a transient npm client issue..." -ForegroundColor Yellow
-                Start-Sleep -Seconds 2
+
+            if ($attempt -eq 1) {
+                Write-Host "npm install failed (exit $LASTEXITCODE) — cleaning the npm cache and retrying..." -ForegroundColor Yellow
+                npm cache clean --force 2>$null
+            } elseif ($attempt -lt $maxInstallAttempts) {
+                Write-Host "npm install failed again (exit $LASTEXITCODE) — removing node_modules for a clean reinstall and retrying..." -ForegroundColor Yellow
+                if (Test-Path 'node_modules') { Remove-Item -Recurse -Force 'node_modules' }
             }
+            if ($attempt -lt $maxInstallAttempts) { Start-Sleep -Seconds 2 }
         }
         if ($LASTEXITCODE -ne 0) {
-            throw "npm install failed with exit code $LASTEXITCODE after $maxInstallAttempts attempt(s). If the error is 'Exit handler never called!', that is a known npm client bug (https://github.com/npm/cli/issues/4028), not an issue with this project — try 'npm cache clean --force', updating npm ('npm install -g npm@latest'), or temporarily excluding the npm cache/repo folder from antivirus scanning, then re-run this script."
+            throw "npm install failed with exit code $LASTEXITCODE after $maxInstallAttempts attempt(s) (including a cache clean and a clean node_modules reinstall). If the error is 'Exit handler never called!', that is a known npm client bug (https://github.com/npm/cli/issues/4028) rather than an issue with this project. This usually means something outside npm's control is interfering — most often antivirus/EDR scanning or locking files under the npm cache or this repo folder. Try excluding both from real-time scanning, update npm ('npm install -g npm@latest'), and re-run this script."
         }
     } else {
         Write-Step "Skipping npm install (-SkipInstall)"
